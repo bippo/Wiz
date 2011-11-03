@@ -28,7 +28,8 @@ Class Wiz_Plugin_Cache extends Wiz_Plugin_Abstract {
     /**
      * Clear the Magento caches.  Same processes used by the Administrative backend.
      * 
-     * If called as "wiz cache-clear" then we will clear the 
+     * Available caches: invalidated, system, js, css, jscss, images, all, default.
+     * If called as "wiz cache-clear" then we will clear the 'default' cache.
      *
      * @author Nicholas Vahalik <nick@classyllama.com>
      */
