@@ -14,15 +14,16 @@
  *
  * @package    Wiz
  * @author     Nick Vahalik <nick@classyllama.com>
- * @copyright  Copyright (c) 2011 Classy Llama Studios
+ * @copyright  Copyright (c) 2012 Classy Llama Studios, LLC
  * @license    http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
 class Wiz_Plugin_Module extends Wiz_Plugin_Abstract {
 
     /**
-     * Lists all of the modules that are currently installed on the Magento installation
-     * and what their active flag is.
+     * Lists all of the modules that are currently installed on the Magento installation, 
+     * the version in their xml file, the version of the setup resource in the database,
+     * their code pool, and what their active flag is.
      *
      * @author Nicholas Vahalik <nick@classyllama.com>
      */
@@ -31,12 +32,23 @@ class Wiz_Plugin_Module extends Wiz_Plugin_Abstract {
         $modules = (array)Mage::getConfig()->getNode('modules')->children();
         $moduleList = array();
 
+        $coreResource = Mage::getSingleton('core/resource');
+        $connection  = Mage::getSingleton('core/resource')->getConnection('core_read');
+        $select = $connection->select()->from($coreResource->getTableName('core/resource'), array('code' , 'version'));
+
+        $result = $connection->fetchPairs($select);
+
+        foreach(Mage::getConfig()->getNode('global/resources')->children() as $resourceData) {
+            $resourceMappings[(string)$resourceData->setup->module] = $resourceData->getName();
+        }
+
         foreach ($modules as $moduleName => $moduleData) {
             $flag = strtolower(Mage::getConfig()->getNode('advanced/modules_disable_output/' . $moduleName, 'default'));
 
             $moduleList[] = array(
                 'Module Name' => $moduleName,
-                'Version' => (string)$moduleData->version,
+                'Version (xml)' => (string)$moduleData->version,
+                'Version (db)' => $resourceMappings[$moduleName] != '' ? (string)$result[$resourceMappings[$moduleName]] : 'n/a',
                 'Active' => $moduleData->active ? 'Active' : 'Disabled',
                 'Output' => !empty($flag) && 'false' !== $flag ? 'Disabled' : 'Enabled',
                 'Code Pool' => $moduleData->codePool,
@@ -44,7 +56,6 @@ class Wiz_Plugin_Module extends Wiz_Plugin_Abstract {
         }
 
         echo Wiz::tableOutput($moduleList);
-        return TRUE;
     }
 
     /**
@@ -58,8 +69,7 @@ class Wiz_Plugin_Module extends Wiz_Plugin_Abstract {
      */
     public static function enableAction($options) {
         if (count($options) < 1) {
-            echo 'Please provide modules names to enable.'.PHP_EOL;
-            return TRUE;
+            throw new Exception('Please provide the names of modules to enable.');
         }
         $modulesEnabled = $modulesAlreadyEnabled = array();
         Wiz::getMagento();
@@ -101,8 +111,6 @@ class Wiz_Plugin_Module extends Wiz_Plugin_Abstract {
         if (count($modulesAlreadyEnabled)) {
             echo 'Module(s) already enabled: '.implode(', ', $modulesAlreadyEnabled).  PHP_EOL;
         }
-
-        return TRUE;
     }
 
     /**
@@ -121,7 +129,6 @@ class Wiz_Plugin_Module extends Wiz_Plugin_Abstract {
     public static function disableAction($options) {
         if (count($options) < 1) {
             echo 'Please provide modules names to disable.'.PHP_EOL;
-            return TRUE;
         }
         $modulesDisabled = $modulesAlreadyDisabled = $filesToCheck = array();
         Wiz::getMagento();
@@ -182,8 +189,6 @@ class Wiz_Plugin_Module extends Wiz_Plugin_Abstract {
         if (count($modulesAlreadyDisabled)) {
             echo 'Module(s) already disabled: '.implode(', ', $modulesAlreadyDisabled).  PHP_EOL;
         }
-
-        return TRUE;
     }
 
     /**
@@ -195,7 +200,6 @@ class Wiz_Plugin_Module extends Wiz_Plugin_Abstract {
     public static function enableoutputAction($options) {
         if (count($options) < 1) {
             echo 'Please provide modules names to enable output on.'.PHP_EOL;
-            return TRUE;
         }
         $modulesEnabled = $modulesAlreadyEnabled = array();
 
@@ -227,8 +231,6 @@ class Wiz_Plugin_Module extends Wiz_Plugin_Abstract {
         if (count($modulesAlreadyEnabled)) {
             echo 'Module(s) output already enabled: '.implode(', ', $modulesAlreadyEnabled).  PHP_EOL;
         }
-
-        return TRUE;
     }
 
     /**
@@ -240,7 +242,6 @@ class Wiz_Plugin_Module extends Wiz_Plugin_Abstract {
     public static function disableoutputAction($options) {
         if (count($options) < 1) {
             echo 'Please provide modules names to enable.'.PHP_EOL;
-            return TRUE;
         }
         $modulesDisable = $modulesAlreadyDisabled = array();
         Wiz::getMagento();
@@ -271,21 +272,5 @@ class Wiz_Plugin_Module extends Wiz_Plugin_Abstract {
         if (count($modulesAlreadyDisabled)) {
             echo 'Module(s) already disabled: '.implode(', ', $modulesAlreadyDisabled).  PHP_EOL;
         }
-
-        return TRUE;
     }
-
-    /**
-     * Creates a 
-     *
-     * @param string $options 
-     * @return void
-     * @author Nicholas Vahalik <nick@classyllama.com>
-     */
-    public static function createAction($options) {
-        if (count($options) > 0) {
-             
-        }
-    }
-
 }

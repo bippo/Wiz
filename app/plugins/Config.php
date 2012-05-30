@@ -8,13 +8,13 @@
  * http://opensource.org/licenses/osl-3.0.php
  *
  * DISCLAIMER
- * 
+ *
  * This program is provided to you AS-IS.  There is no warranty.  It has not been
  * certified for any particular purpose.
  *
  * @package    Wiz
  * @author     Nick Vahalik <nick@classyllama.com>
- * @copyright  Copyright (c) 2011 Classy Llama Studios
+ * @copyright  Copyright (c) 2012 Classy Llama Studios, LLC
  * @license    http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -25,6 +25,12 @@
  */
 class Wiz_Plugin_Config extends Wiz_Plugin_Abstract {
 
+    /**
+     * Returns the value stored in Magento for the given config path.
+     *
+     * @param Configuration path.
+     * @author Nicholas Vahalik <nick@classyllama.com>
+     */
     public function getAction($options) {
         // Mage_Core_Model_Config_Element
         $result = Wiz::getMagento()->getConfig()->getNode($options[0]);
@@ -48,34 +54,47 @@ class Wiz_Plugin_Config extends Wiz_Plugin_Abstract {
         elseif ($result === FALSE) {
             echo 'Configuration path "' . $options[0] . '" not found.'.PHP_EOL;
         }
-        return TRUE;
     }
 
     /**
      * Retrieve a single store configuration node path.
-     * 
-     * Example: config-storeget sales_email/order/enabled
+     *
+     * Example: config-storget sales_email/order/enabled
      * This will return the value in the configuration if the order e-mails are enabled.
+     *
+     * Options:
+     *   --all         Returns the value for all stores in the Magento installation.
      *
      * @param Node path string.
      * @author Nicholas Vahalik <nick@classyllama.com>
      */
     public function storegetAction($options) {
-        $store = 'default';
-        if (count($options) > 1) {
-            $store = array_shift($options);
-        }
-        $path = array_shift($options);
-        
+
+        $stores = $output = array();
+
         Wiz::getMagento();
 
-        $value = Mage::getStoreConfig($path);// Wiz::getMagento()->
-        if (is_array($value))
-        	$textValue = '['.implode(', ', array_keys($value)).']';
-        else
-        	$textValue = $value;
-        echo "($store) $path" . ' = ' . $textValue .PHP_EOL; 
-        return TRUE;
+        if (Wiz::getWiz()->getArg('all')) {
+            $storeCollection = Mage::getModel('core/store')->getCollection();
+            foreach ($storeCollection as $store) {
+                $stores[] = $store->getCode();
+            }
+        }
+        elseif (count($options) > 1) {
+            $stores = array(array_shift($options));
+        }
+        else {
+            $stores = array('default');
+        }
+
+        $path = array_shift($options);
+
+        foreach ($stores as $store) {
+            $output[] = array('Store Id' => $store, $path => Mage::getStoreConfig($path, $store));
+            // echo "($store) $path" . ' = ' . Mage::getStoreConfig($path, $store);// Wiz::getMagento()->
+        }
+        echo Wiz::tableOutput($output);
+        echo PHP_EOL;
     }
 
     /**
@@ -105,7 +124,6 @@ class Wiz_Plugin_Config extends Wiz_Plugin_Abstract {
             $parentArray = array_reverse($parentArray);
             $this->_recurseXpathOutput($parentArray, $result);
         }
-        return TRUE;
     }
 
     private function _recurseXpathOutput($parents, $xmlelement) {
@@ -124,65 +142,51 @@ class Wiz_Plugin_Config extends Wiz_Plugin_Abstract {
     /**
      * Returns the entire Magento config as nicely formatted XML to stdout.
      * Options:
-     *  --ugly (optional) - Makes the output ugly (no tabs or newlines)
-     * 
+     *   --ugly (optional)   Makes the output ugly (no tabs or newlines)
+     *
+     *   --system            Returns the modules configuration (system.xml)
+     *
+     *   --indent <int>      Number of spaces to use to indent the XML.  The
+     *                       default is 3.
+     *
      * @return The Magento Configuration as as nicely printed XML File.
      * @author Nicholas Vahalik <nick@classyllama.com>
      */
     public function asxmlAction() {
         Wiz::getMagento();
-        if (Wiz::getWiz()->getArg('ugly')) {
-            echo Mage::getConfig()->getNode()->asXml();
+
+        if (Wiz::getWiz()->getArg('system')) {
+            $xml = Mage::getConfig()->loadModulesConfiguration('system.xml');
         }
         else {
-            echo Mage::getConfig()->getNode()->asNiceXml();
+            $xml = Mage::getConfig();
         }
-        echo PHP_EOL;
-        return TRUE;
-    }
 
-    public function setAction($options) {
-        $scopeCode = 'default';
-        $scopeId = 0;
+        if (!Wiz::getWiz()->getArg('ugly')) {
+            $output = $xml->getNode()->asNiceXml('');
 
-        foreach (array('store', 'website') as $scope) {
-            if (($argScopeCode = Wiz::getWiz()->getArg($scope)) !== FALSE) {
-                // If --store is specified, but not provided, use the default.
-                $scopeCode = $argScopeCode === TRUE ? '' : $argScopeCode;
-                $scopeId = $scope;
-                $thing = array_search($scope, $options);
-                if ($thing !== FALSE) {
-                    unset($options[$thing]);
-                    unset($options[$thing+1]);
-                }
-                break;
+            // Update with our indentation if so desired.
+            if (Wiz::getWiz()->getArg('indent') !== false) {
+                $output = preg_replace_callback('#^(\s+)#m', array($this, '_replaceSpaces'), $output);
             }
         }
+        else {
+            $output = $xml->getNode()->asXml();
+        }
 
-        Wiz::getMagento();
-        var_dump(array_shift($options), array_shift($options), $scopeCode, $scopeId);
-        Mage::getConfig()->saveConfig(array_shift($options), array_shift($options), $scopeId, $scopeCode);
-        $cacheSystem = new Wiz_Plugin_Cache();
-        $cacheSystem->_cleanCachesById(array('config'));
-        return TRUE;
+        echo $output;
+        echo PHP_EOL;
     }
 
     /**
-     * config-defaultset CONFIG_PATH VALUE
-     * @param array $options
-     * @return boolean true if successful
+     * Replace the standard 3 spaces asXml products with whatever we want.
+     *
+     * @param string $matches
+     * @return void
+     * @author Nicholas Vahalik <nick@classyllama.com>
      */
-    public function defaultsetAction($options) {
-    	$configPath = $options[0];
-    	$value = $options[1];
-    	$scope = 'default';
-    	$scopeId = 0;
-    	
-    	$config = Wiz::getMagento()->getConfig();
-    	// this will take effect at *next* invocation
-    	$config->saveConfig($configPath, $value, $scope, $scopeId);
-    	echo "[$scope.$scopeId] $configPath = $value". PHP_EOL;
-    	return true;
+    protected function _replaceSpaces($matches) {
+        $newSpaces = (int)Wiz::getWiz()->getArg('indent');
+        return str_repeat(' ', (strlen($matches[1]) / 3) * $newSpaces);
     }
 }
-

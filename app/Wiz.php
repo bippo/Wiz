@@ -14,11 +14,9 @@
  *
  * @package    Wiz
  * @author     Nick Vahalik <nick@classyllama.com>
- * @copyright  Copyright (c) 2011 Classy Llama Studios
+ * @copyright  Copyright (c) 2012 Classy Llama Studios, LLC
  * @license    http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
-
-// For now, let's eschew extensive command line params in favor of environment variables.
 
 ini_set('date.timezone', 'America/Chicago');
 error_reporting(-1);
@@ -35,7 +33,7 @@ define('WIZ_DS', DIRECTORY_SEPARATOR);
  */
 class Wiz {
 
-    const WIZ_VERSION = '0.9.5';
+    const WIZ_VERSION = '0.9.8';
 
     static private $config;
 
@@ -167,6 +165,12 @@ class Wiz {
                 }
             }
 
+            // We only want to enable profiling if it has been turned on within the
+            // configuration AND if the --profile argument was passed into the command. 
+            if(Mage::getStoreConfig('dev/debug/profiler') && Wiz::getWiz()->getArg('profile')){
+            	Varien_Profiler::enable();
+            }
+            
             $_magento = Mage::app($scopeCode, $scopeId);
         }
         return $_magento;
@@ -174,7 +178,6 @@ class Wiz {
 
     public function versionAction() {
         echo 'Version: '.Wiz::WIZ_VERSION;
-        return TRUE;
     }
 
     public function updateAction() {
@@ -236,7 +239,6 @@ class Wiz {
         }
 
         // Check the remote service to see what the latest version of Wiz is.
-        return TRUE;
     }
 
     private function rrmdir($dir) { 
@@ -248,7 +250,7 @@ class Wiz {
                 } 
             } 
             reset($objects); 
-            rmdir($dir); 
+            rmdir($dir);
         } 
     }
 
@@ -321,7 +323,6 @@ class Wiz {
         else {
             echo "Unknown command: $command".PHP_EOL;
         }
-        return TRUE;
     }
 
     /**
@@ -331,11 +332,21 @@ class Wiz {
      * @author Nicholas Vahalik <nick@classyllama.com>
      */
     public function listActions() {
+        echo PHP_EOL;
         echo 'Available commands: '.PHP_EOL;
+        echo PHP_EOL;
         foreach ($this->_availableCommands as $commandName => $commandArray) {
-            echo $commandName.PHP_EOL;
+            if(!array_key_exists('documentation', $commandArray) || trim($commandArray['documentation']) == '') {
+                continue;
+            }
+            $docLines = explode(PHP_EOL, $commandArray['documentation']);
+            $docLineOne = array_shift($docLines);
+            if (($endOfSentence = strpos($docLineOne, '.')) !== FALSE) {
+                $docLineOne = substr($docLineOne, 0, $endOfSentence + 1);
+            }
+            printf('  %-23s %s' . PHP_EOL, $commandName, $docLineOne);
         }
-        return TRUE;
+        echo PHP_EOL;
     }
 
     function _initWiz() {
@@ -348,8 +359,15 @@ class Wiz {
     public function run() {
         $argv = $_SERVER['argv'];
 
-        array_shift($argv);
+        // If the first item is us.  We don't need it.
+        if (count($argv) == 1 && $argv[0] == dirname(dirname(__FILE__)) . WIZ_DS . 'wiz.php') {
+            array_shift($argv);
+        }
+
+        // Next item is the command
         $command = array_shift($argv);
+
+        // Attempt to run the command.
         if (array_key_exists($command, $this->_availableCommands)) {
             if ($this->_availableCommands[$command]['class'] == __CLASS__) {
                 $pluginInstance = $this;
@@ -357,28 +375,58 @@ class Wiz {
             else {
                 $pluginInstance = new $this->_availableCommands[$command]['class']();
             }
-            if (!$pluginInstance->{$this->_availableCommands[$command]['method']}($argv)) {
-                echo 'An error occured while processing the command: '.$command.PHP_EOL;
+            try {
+                $pluginInstance->{$this->_availableCommands[$command]['method']}($argv);
+            } catch(Exception $e) {
+                echo 'An error occured while processing the command: ' . $command . PHP_EOL;
+                echo $e->getMessage() . PHP_EOL;
             }
         }
         elseif ($command == '') {
             echo $this->getHelp();
         }
         else {
-            echo 'Unable to find that command: '.$command.PHP_EOL;
+            echo 'Unable to find that command: ' . $command . PHP_EOL;
         }
     }
 
     public function getHelp() {
-        $helpText = 'Wiz version '.Wiz::WIZ_VERSION.PHP_EOL;
+        $helpText = 'Wiz v'.Wiz::WIZ_VERSION.PHP_EOL;
         $helpText .= 'Provides a CLI interface to get information from, script, and help you manage'.PHP_EOL;
         $helpText .= 'your Magento installation.'.PHP_EOL;
         $helpText .= PHP_EOL;
-        $helpText .= 'Available commands:'.PHP_EOL;
-        foreach ($this->_availableCommands as $commandName => $commandArray) {
-            $helpText .= '  '.$commandName.PHP_EOL;
-        }
-        return $helpText.PHP_EOL;
+        $helpText .= 'Usage:';
+        $helpText .= PHP_EOL;
+        $helpText .= '  wiz [global-options] <command> [command-options]';
+        $helpText .= PHP_EOL;
+        $helpText .= '                Runs a command.';
+        $helpText .= PHP_EOL;
+        $helpText .= PHP_EOL;
+        $helpText .= '  wiz help <command>';
+        $helpText .= PHP_EOL;
+        $helpText .= '                Returns help on a command.';
+        $helpText .= PHP_EOL;
+        $helpText .= PHP_EOL;
+        $helpText .= '  wiz command-list';
+        $helpText .= PHP_EOL;
+        $helpText .= '                Returns the list of available commands.';
+        $helpText .= PHP_EOL;
+        $helpText .= PHP_EOL;
+        $helpText .= 'Global Options:';
+        $helpText .= PHP_EOL;
+        $helpText .= '  --batch [csv|pipe|tab]';
+        $helpText .= PHP_EOL;
+        $helpText .= '                Returns tabular data in a parseable format.  Defaults to "csv"';
+        $helpText .= PHP_EOL;
+        $helpText .= PHP_EOL;
+        $helpText .= '  --store <store-code|store-id>,';
+        $helpText .= PHP_EOL;
+        $helpText .= '  --website <website-code|website-id>';
+        $helpText .= PHP_EOL;
+        $helpText .= '                Executes Magento as this particular store or website.';
+        $helpText .= PHP_EOL;
+        $helpText .= PHP_EOL;
+        return $helpText . PHP_EOL;
     }
 
     public static function inspect() {
@@ -387,39 +435,56 @@ class Wiz {
     }
 
     /**
-     * Parse input arguments
+     * Parse input arguments, removing them as we find them.
      *
      * @return Wiz_Plugin_Abstract
      */
     protected function _parseArgs() {
-        $current = null;
-        foreach ($_SERVER['argv'] as $arg) {
+        $current = $commandStart = $inCommand = false;
+        $commandEnd = 1;
+
+        foreach ($_SERVER['argv'] as $position => $arg) {
+
+            if ($commandStart === FALSE && array_key_exists($arg, $this->_availableCommands)) {
+                $commandStart = $position;
+                $inCommand = TRUE;
+            }
+
             $match = array();
             if (preg_match('#^--([\w\d_-]{1,})$#', $arg, $match) || preg_match('#^-([\w\d_]{1,})$#', $arg, $match)) {
+                $inCommand = false;
                 $current = $match[1];
                 $this->_args[$current] = true;
             } else {
                 if ($current) {
                     $this->_args[$current] = $arg;
-                } else if (preg_match('#^([\w\d_]{1,})$#', $arg, $match)) {
+                } else if (!$inCommand && preg_match('#^([\w\d_]{1,})$#', $arg, $match)) {
                     $this->_args[$match[1]] = true;
+                } else {
+                    if ($inCommand && $commandStart != $position) {
+                        $commandEnd++;
+                    }
                 }
             }
         }
+        $_SERVER['argv'] = array_slice($_SERVER['argv'], $commandStart, $commandEnd);
+        // var_dump($commandStart, $commandEnd);
+        // var_dump($_SERVER['argv']);
+        // var_dump($this->_args);
         return $this;
     }
 
     /**
-     * Retrieve argument value by name or false
+     * Retrieve argument value by name or the default specified
      *
      * @param string $name the argument name
      * @return mixed
      */
-    public function getArg($name) {
+    public function getArg($name, $default = false) {
         if (isset($this->_args[$name])) {
             return $this->_args[$name];
         }
-        return false;
+        return $default;
     }
 
     /**

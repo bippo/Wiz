@@ -14,7 +14,7 @@
  *
  * @package    Wiz
  * @author     Nick Vahalik <nick@classyllama.com>
- * @copyright  Copyright (c) 2011 Classy Llama Studios
+ * @copyright  Copyright (c) 2012 Classy Llama Studios, LLC
  * @license    http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -73,8 +73,6 @@ Class Wiz_Plugin_Cache extends Wiz_Plugin_Abstract {
         else {
             $this->_cleanCachesById($options);
         }
-
-        return TRUE;
     }
 
     function _cleanCachesById($options) {
@@ -151,10 +149,14 @@ Class Wiz_Plugin_Cache extends Wiz_Plugin_Abstract {
         else {
             echo 'Nothing was done.  Likely they were already enabled.'.PHP_EOL;
         }
-
-        return TRUE;
     }
 
+    /**
+     * Disables caches by name.
+     *
+     * @param One or more caches, separated by a space.
+     * @author Nicholas Vahalik <nick@classyllama.com>
+     */
     function disableAction($options) {
         $caches = $this->_getAllMagentoCacheTypes();
 
@@ -199,10 +201,14 @@ Class Wiz_Plugin_Cache extends Wiz_Plugin_Abstract {
         else {
             echo 'Nothing was done.  Likely they were already disabled.'.PHP_EOL;
         }
-
-        return TRUE;
     }
 
+
+    /**
+     * Returns the status of all or named caches.
+     *
+     * @author Nicholas Vahalik <nick@classyllama.com>
+     */
     function statusAction() {
         $types = $this->_getAllMagentoCacheTypes();
         $invalidatedTypes = Mage::app()->getCacheInstance()->getInvalidatedTypes();
@@ -215,7 +221,6 @@ Class Wiz_Plugin_Cache extends Wiz_Plugin_Abstract {
             );
         }
         echo Wiz::tableOutput($rows);
-        return TRUE;
     }
 
     public function _cleanAll() {

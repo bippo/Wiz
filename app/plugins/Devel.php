@@ -8,13 +8,13 @@
  * http://opensource.org/licenses/osl-3.0.php
  *
  * DISCLAIMER
- * 
+ *
  * This program is provided to you AS-IS.  There is no warranty.  It has not been
  * certified for any particular purpose.
  *
  * @package    Wiz
  * @author     Nick Vahalik <nick@classyllama.com>
- * @copyright  Copyright (c) 2011 Classy Llama Studios
+ * @copyright  Copyright (c) 2012 Classy Llama Studios, LLC
  * @license    http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -22,55 +22,66 @@ class Wiz_Plugin_Devel extends Wiz_Plugin_Abstract {
 
     /**
      * Enables, disables, or displays the value of template hints.
-     * 
+     *
      * To show: wiz devel-showhints
-     * 
+     *
      * To enable: wiz devel-showhints <yes|true|1|totally>
-     * 
+     *
      * To disable: wiz devel-showhints <no|false|0|nah>
-     * 
+     *
      * Note: this will not affect sites if the template hints are overriden via the system
      * config in the dashboard... for now.
      *
      * @author Nicholas Vahalik <nick@classyllama.com>
      **/
     public function showhintsAction($options) {
+        /*
+         * Per #7, if client restrictions are enabled, template hints won't work.
+         * I'm not sure if it is a good idea to simply just disable the restrictions,
+         * but we could alert the poor soul that they are set.
+         */
+
+        Wiz::getMagento();
+        $value = Mage::getStoreConfig('dev/restrict/allow_ips');
+
+        if ($value != NULL) {
+            echo 'Developer restrictions are enabled.  This value has no effect.' . PHP_EOL;
+        }
+
         $this->toggleConfigValue($options, array('dev/debug/template_hints', 'dev/debug/template_hints_blocks'));
-        return TRUE;
     }
 
     /**
      * Enables, disables, or displays the status of logging in Magento.
-     * 
+     *
      * To show: wiz devel-logging
-     * 
+     *
      * To enable: wiz devel-logging <yes|true|1|totally>
-     * 
+     *
      * To disable: wiz devel-logging <no|false|0|nah>
-     * 
+     *
      * @author Nicholas Vahalik <nick@classyllama.com>
      **/
     public function loggingAction($options) {
         $this->toggleConfigValue($options, 'dev/log/active');
-        return TRUE;
     }
 
     /**
      * Enables, disables, or displays the value of symlinks allowed for templates.
-     * 
+     *
      * To show: wiz devel-allowsymlinks
-     * 
+     *
      * To enable: wiz devel-allowsymlinks <yes|true|1|totally>
-     * 
+     *
      * To disable: wiz devel-allowsymlinks <no|false|0|nah>
-     * 
+     *
      * Only compatible with Magento 1.5.1.0+
-     * 
+     *
      * @author Nicholas Vahalik <nick@classyllama.com>
      **/
     public function allowsymlinksAction($options) {
+        Wiz::getMagento();
         $this->toggleConfigValue($options, Mage_Core_Block_Template::XML_PATH_TEMPLATE_ALLOW_SYMLINK);
-        return TRUE;
     }
 
     /**
@@ -80,7 +91,7 @@ class Wiz_Plugin_Devel extends Wiz_Plugin_Abstract {
      */
     public function configAction($options) {
         Wiz::getMagento();
-        $values = 
+        $values =
         array('dev/debug/profiler',
               'dev/js/merge_files',
               'dev/css/merge_css_files',
@@ -97,55 +108,51 @@ class Wiz_Plugin_Devel extends Wiz_Plugin_Abstract {
 
         $this->toggleConfigValue(array(),
             $values);
-        return TRUE;
     }
 
     /**
      * Enables, disables, or displays the status of the profiler.
-     * 
+     *
      * To show: wiz devel-profiler
-     * 
+     *
      * To enable: wiz devel-profiler <yes|true|1|totally>
-     * 
+     *
      * To disable: wiz devel-profiler <no|false|0|nah>
-     * 
+     *
      * @author Nicholas Vahalik <nick@classyllama.com>
      **/
     public function profilerAction($options) {
         $this->toggleConfigValue($options, 'dev/debug/profiler');
-        return TRUE;
     }
 
     /**
      * Enables, disables, or displays the status of JS Merging.
-     * 
+     *
      * To show: wiz devel-mergejs
-     * 
+     *
      * To enable: wiz devel-mergejs <yes|true|1|totally>
-     * 
+     *
      * To disable: wiz devel-mergejs <no|false|0|nah>
-     * 
+     *
      * @author Nicholas Vahalik <nick@classyllama.com>
      **/
     public function mergejsAction($options) {
         $this->toggleConfigValue($options, 'dev/js/merge_files');
-        return TRUE;
     }
 
     /**
      * Enables, disables, or displays the status of CSS Merging.
-     * 
+     *
      * To show: wiz devel-mergecss
-     * 
+     *
      * To enable: wiz devel-mergecss <yes|true|1|totally>
-     * 
+     *
      * To disable: wiz devel-mergecss <no|false|0|nah>
-     * 
+     *
      * @author Nicholas Vahalik <nick@classyllama.com>
      **/
     public function mergecssAction($options) {
         $this->toggleConfigValue($options, 'dev/css/merge_css_files');
-        return TRUE;
     }
 
     /**
@@ -174,8 +181,8 @@ class Wiz_Plugin_Devel extends Wiz_Plugin_Abstract {
                 $showValue = 1;
             }
             else {
+                // @todo - Exception
                 echo 'Invalid option: ' . $options[0] . PHP_EOL;
-                return TRUE;
             }
         }
 
@@ -198,21 +205,34 @@ class Wiz_Plugin_Devel extends Wiz_Plugin_Abstract {
         if ($output) {
             echo Wiz::tableOutput($output);
         }
-        return TRUE;
     }
 
     /**
-     * Returns a list of event watchers
+     * Returns a list of registered event observers.
      *
      * @author Nicholas Vahalik <nick@classyllama.com>
      **/
     public function listenersAction() {
+        $modelMapping = array();
         Wiz::getMagento();
-        $eventListeners = array();
+        $wiz = Wiz::getWiz();
 
+        $modelMapping = array_merge($modelMapping, $this->getObserversForPath('global/events'));
+        $modelMapping = array_merge($modelMapping, $this->getObserversForPath('frontend/events'));
+        $modelMapping = array_merge($modelMapping, $this->getObserversForPath('adminhtml/events'));
+
+        echo Wiz::tableOutput($modelMapping);
+    }
+
+    /**
+     * returns a list of observers from the configuration XML from
+     * a config path.
+     *
+     * @author Nicholas Vahalik <nick@classyllama.com>
+     */
+    function getObserversForPath($path) {
         $config = Mage::getConfig();
-
-        foreach ($config->getNode('global/events')->children() as $parent => $children) {
+        foreach ($config->getNode($path)->children() as $parent => $children) {
             foreach ($children->children() as $childName => $observerInfo) {
                 if ((string)$childName !== 'observers') continue;
 
@@ -225,16 +245,14 @@ class Wiz_Plugin_Devel extends Wiz_Plugin_Abstract {
                 }
             }
         }
-
-        echo Wiz::tableOutput($modelMapping);
-        return TRUE;
+        return $modelMapping;
     }
 
     /**
      * Returns a list of model names to class maps.  This will also call out rewritten
      * classes so you can see what type of object you will get when you call
      * Mage::getModel(_something_).
-     * 
+     *
      *     +------------+-------------------+
      *     | Model Name | PHP Class         |
      *     +------------+-------------------+
@@ -247,7 +265,7 @@ class Wiz_Plugin_Devel extends Wiz_Plugin_Abstract {
      *      --all       (shows everything, default)
      *      --models    (shows only models, not resource models)
      *      --resources (shows only resource models, not models)
-     * 
+     *
      * @author Nicholas Vahalik <nick@classyllama.com>
      **/
     public function modelsAction() {
@@ -264,7 +282,7 @@ class Wiz_Plugin_Devel extends Wiz_Plugin_Abstract {
         }
 
         foreach ($config->getNode('global/models')->children() as $parent => $children) {
-            if (substr($parent, -7) == '_mysql4' && !$showResources || substr($parent, -7) != '_mysql4' && !$showModels) 
+            if (substr($parent, -7) == '_mysql4' && !$showResources || substr($parent, -7) != '_mysql4' && !$showModels)
                 continue;
             foreach ($children->children() as $className => $classData) {
                 switch ($className) {
@@ -288,7 +306,6 @@ class Wiz_Plugin_Devel extends Wiz_Plugin_Abstract {
         }
 
         echo Wiz::tableOutput($modelMapping);
-        return TRUE;
     }
 
     /**
@@ -300,7 +317,7 @@ class Wiz_Plugin_Devel extends Wiz_Plugin_Abstract {
      * @return void
      * @author Nicholas Vahalik <nick@classyllama.com>
      */
-    public static function eventsAction() {
+    public function eventsAction() {
         Wiz::getMagento();
         $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(Wiz::getMagentoRoot().DIRECTORY_SEPARATOR.'app'));
         foreach ($iterator as $file) {
@@ -339,6 +356,5 @@ class Wiz_Plugin_Devel extends Wiz_Plugin_Abstract {
             $eventOutput[] = array('Event Name' => $eventName);
         }
         echo Wiz::tableOutput($eventOutput);
-        return TRUE;
-    }    
-}   
+    }
+}

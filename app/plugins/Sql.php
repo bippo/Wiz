@@ -14,7 +14,7 @@
  *
  * @package    Wiz
  * @author     Nick Vahalik <nick@classyllama.com>
- * @copyright  Copyright (c) 2011 Classy Llama Studios
+ * @copyright  Copyright (c) 2012 Classy Llama Studios, LLC
  * @license    http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -49,21 +49,17 @@ class Wiz_Plugin_Sql extends Wiz_Plugin_Abstract {
             echo $key . ' = '. $value.PHP_EOL;
         }
         echo 'MySQL command line: '."mysql -u{$config['username']} -p{$config['password']}".( $config['port'] ? " -P{$config['port']}" : '')." -h{$config['host']} {$config['dbname']}".PHP_EOL;
-        return TRUE;
     }
 
     /**
      * Opens up a shell command directly to the the database server.
      *
      * @param string $options 
-     * @return void
      * @author Nicholas Vahalik <nick@classyllama.com>
      */
     public function cliAction($options) {
         $config = $this->_getDbConfig();
         proc_close(proc_open("mysql -u{$config['username']} -p{$config['password']}".( $config['port'] ? " -P{$config['port']}" : '')." -h{$config['host']} {$config['dbname']}", array(0 => STDIN, 1 => STDOUT, 2 => STDERR), $pipes));
-        // echo PHP_EOL;
-        return TRUE;
     }
 
     /**
@@ -85,6 +81,5 @@ class Wiz_Plugin_Sql extends Wiz_Plugin_Abstract {
             $batch = '--batch';
         }
         proc_close(proc_open("mysql $batch -u{$config['username']} -p{$config['password']} -P{$config['port']} -h{$config['host']} {$config['dbname']} -e \"$query\"", array(0 => STDIN, 1 => STDOUT, 2 => STDERR), $pipes));
-        return TRUE;
     }
 }
