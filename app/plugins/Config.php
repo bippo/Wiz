@@ -90,7 +90,9 @@ class Wiz_Plugin_Config extends Wiz_Plugin_Abstract {
         $path = array_shift($options);
 
         foreach ($stores as $store) {
-            $output[] = array('Store Id' => $store, $path => Mage::getStoreConfig($path, $store));
+        	$value = Mage::getStoreConfig($path, $store);
+        	$textValue = is_array($value) ? '['.implode(', ', array_keys($value)).']' : $value;
+            $output[] = array('Store Id' => $store, $path => $textValue);
             // echo "($store) $path" . ' = ' . Mage::getStoreConfig($path, $store);// Wiz::getMagento()->
         }
         echo Wiz::tableOutput($output);
