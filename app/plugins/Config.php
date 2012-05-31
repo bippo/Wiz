@@ -180,6 +180,50 @@ class Wiz_Plugin_Config extends Wiz_Plugin_Abstract {
         echo PHP_EOL;
     }
 
+    public function setAction($options) {
+    	$scopeCode = 'default';
+    	$scopeId = 0;
+    
+    	foreach (array('store', 'website') as $scope) {
+    		if (($argScopeCode = Wiz::getWiz()->getArg($scope)) !== FALSE) {
+    			// If --store is specified, but not provided, use the default.
+    			$scopeCode = $argScopeCode === TRUE ? '' : $argScopeCode;
+    			$scopeId = $scope;
+    			$thing = array_search($scope, $options);
+    			if ($thing !== FALSE) {
+    				unset($options[$thing]);
+    				unset($options[$thing+1]);
+    			}
+    			break;
+    		}
+    	}
+    
+    	Wiz::getMagento();
+    	var_dump(array_shift($options), array_shift($options), $scopeCode, $scopeId);
+    	Mage::getConfig()->saveConfig(array_shift($options), array_shift($options), $scopeId, $scopeCode);
+    	$cacheSystem = new Wiz_Plugin_Cache();
+    	$cacheSystem->_cleanCachesById(array('config'));
+    	return TRUE;
+    }
+    
+    /**
+     * config-defaultset CONFIG_PATH VALUE
+     * @param array $options
+     * @return boolean true if successful
+     */
+    public function defaultsetAction($options) {
+    	$configPath = $options[0];
+    	$value = $options[1];
+    	$scope = 'default';
+    	$scopeId = 0;
+    	 
+    	$config = Wiz::getMagento()->getConfig();
+    	// this will take effect at *next* invocation
+    	$config->saveConfig($configPath, $value, $scope, $scopeId);
+    	echo "[$scope.$scopeId] $configPath = $value". PHP_EOL;
+    	return true;
+    }
+
     /**
      * Replace the standard 3 spaces asXml products with whatever we want.
      *
